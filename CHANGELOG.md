@@ -6,4 +6,4 @@ All notable changes to this project will be documented in this file. This change
 ## [0.0.1] - 2017-09-10
 ### Initial commit
 
-[Unreleased]: https://github.com/your-name/cubby/compare/0.0.1...HEAD
+[Unreleased]: https://github.com/gabloe/cubby/compare/0.0.1...HEAD
