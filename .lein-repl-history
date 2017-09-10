@@ -1,0 +1,23 @@
+(def x (.getBytes "abc"))
+x)
+x
+(type x)
+(= (type x) "[B")
+(= (type x) '[B)
+(== (type x) "[B")
+(like (type x) "[B")
+(str (type x))
+(= (type x) "class [B")
+(= (str (type x)) "class [B")
+exit
+(io/delete-file_
+)
+(io/delete-file)
+(:require clojure.java.io :as io)
+(require clojure.java.io :as io)
+(require 'clojure.java.io :as io)
+(:require 'clojure.java.io :as io)
+(require 'clojure.java.io)
+(clojure.java.io/delete-file)
+(clojure.java.io/delete-file "/home/gabriel/github/cubby/testcol")
+exit
