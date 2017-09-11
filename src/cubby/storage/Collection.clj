@@ -27,7 +27,9 @@
               [startGC [] void]
               [startGC [java.lang.Long] void]
               [gcAgents [] void]
-              [close [] void]]
+              [close [] void]
+              [getMappedFile [] clj_mmap.Mmap]
+              [getSlotCapacity [] java.lang.Long]]
     :constructors {[java.lang.String] []
                    [java.lang.String java.lang.Boolean java.lang.Long java.lang.Long] []})
 
@@ -83,12 +85,12 @@
          ^java.lang.String msg
          ^java.lang.String encoding]
     (let [f (io/file (get @(.state this) :filename))
-      to-write (subs msg 0 (min (count msg) (get @(.state this) :slotCapacity)))
+      to-write (subs msg 0 (min (count msg) (.getSlotCapacity this)))
       write-len (count to-write)
       the-rest (subs msg write-len (count msg))
       header-buf (compose-buffer headerSpec)
       header-size (.getHeaderSize this header-buf)
-      header-pos (* id (+ header-size (get @(.state this) :slotCapacity)))
+      header-pos (* id (+ header-size (.getSlotCapacity this)))
       write-pos (+ header-pos header-size)
       signature (getSignature to-write)]
  
@@ -100,14 +102,14 @@
       ;; Ensure there is an agent available to handle the file IO
       (.ensureAgent this id)
     
-      (when (ensureFileSize f (+ header-pos header-size (get @(.state this) :slotCapacity)))
+      (when (ensureFileSize f (+ header-pos header-size (.getSlotCapacity this)))
         ;;Re-map the file
-        (let [old-mapped-file @(get @(.state this) :mapped-file)]
+        (let [old-mapped-file (.getMappedFile this)]
           (reset! (get @(.state this) :mapped-file) (mmap/get-mmap (.getFilename this) :read-write))
           (.close old-mapped-file)))
 
       ;; Write the header and the msg
-      (send-off (get @(get @(.state this) :agents) id) writeCubbyAgent f header-buf header-size header-pos to-write write-pos write-len @(get @(.state this) :mapped-file))
+      (send-off (get @(get @(.state this) :agents) id) writeCubbyAgent f header-buf header-size header-pos to-write write-pos write-len (.getMappedFile this))
 
       ;; Return the remaining msg that wont fit in this cubby
       (if (= (count the-rest) 0)
@@ -138,14 +140,14 @@
   [this ^java.lang.Long id]
   ;; Reads and returns a byte array containing the header for the cubby Id
   (let [read-len (.getHeaderSize this)
-    read-pos (* id (+ read-len (get @(.state this) :slotCapacity)))
+    read-pos (* id (+ read-len (.getSlotCapacity this)))
     f (io/file (get @(.state this) :filename))]
-    (when (ensureFileSize f (+ read-pos read-len (get @(.state this) :slotCapacity)))
+    (when (ensureFileSize f (+ read-pos read-len (.getSlotCapacity this)))
       ;;Re-map the file
-      (let [old-mapped-file @(get @(.state this) :mapped-file)]
+      (let [old-mapped-file (.getMappedFile this)]
         (reset! (get @(.state this) :mapped-file) (mmap/get-mmap (.getFilename this) :read-write))
         (.close old-mapped-file)))
-    (mmap/get-bytes @(get @(.state this) :mapped-file) read-pos read-len)))
+    (mmap/get-bytes (.getMappedFile this) read-pos read-len)))
 
 (defn -readHeader
   [this ^java.lang.Long id]
@@ -162,7 +164,7 @@
 
   (let [*agent* (get @(get @(.state this) :agents) id)]
     (while (nil? @*agent*)
-      (send-off *agent* readCubbyAgent id (.readHeader this id) (get @(.state this) :filename) (.getHeaderSize this) (get @(.state this) :slotCapacity) @(get @(.state this) :mapped-file))
+      (send-off *agent* readCubbyAgent id (.readHeader this id) (.getFilename this) (.getHeaderSize this) (.getSlotCapacity this) (.getMappedFile this))
       (await-for 10 *agent*) ;; Wait at most 10 ms for data to populate the agent
       (Thread/sleep 10))
     (let [value @*agent*]
@@ -175,8 +177,18 @@
   "Getter for the collection filename"
   (get @(.state this) :filename))
 
+(defn -getSlotCapacity
+  [this]
+  "Getter for the slot capacity"
+  (get @(.state this) :slotCapacity))
+
+(defn -getMappedFile
+  [this]
+  "Getter for the raw mmap"
+  @(get @(.state this) :mapped-file))
+
 (defn -close
   [this]
   "Close the mapped file"
   (println "Closing" (.getFilename this))
-  (.close @(get @(.state this) :mapped-file)))
+  (.close (.getMappedFile this)))
