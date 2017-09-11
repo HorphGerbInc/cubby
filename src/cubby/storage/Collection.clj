@@ -49,12 +49,11 @@
 (defn -post-init
   ([this ^java.lang.String filename]
     "By default we should garbage collect agents"
-    );;(future (.startGC this)))
+    (future (.startGC this)))
   ([this ^java.lang.String filename ^java.lang.Boolean gc? ^java.lang.Long slotCapacity ^java.lang.Long maxCache]
     "Allows garbage collection to be disabled (not recommended)"
-    ))
-    ;;(when (true? gc?)
-    ;;  (future (.startGC this)))))
+    (when (true? gc?)
+      (future (.startGC this)))))
 
 (defn -getHeaderSize
   ([this]

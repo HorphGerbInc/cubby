@@ -57,12 +57,7 @@
 (defn -main
   [& args]
   (write-cubby "test-collection" 0 "Hello!")
-  (write-cubby "test-collection" 1 "Hello!")
-  (write-cubby "test-collection" 2 "Hello!")
-  (write-cubby "test-collection" 3 "Hello!")
-  (write-cubby "test-collection" 4 "Hello!")
-  (write-cubby "test-collection" 5 "Hello!")
-  (println (read-cubby "testcol" 0 true))
+  (println (read-cubby "test-collection" 0 true))
   (Thread/sleep 1000)
   (close-collections)
   (shutdown-agents))
