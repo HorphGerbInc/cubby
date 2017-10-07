@@ -7,4 +7,5 @@
   :main ^:skip-aot cubby.core
   :aot [cubby.storage.Collection]
   :target-path "target/%s"
+  :jvm-opts ["-Dio.netty.leakDetectionLevel=advanced"]
   :profiles {:uberjar {:aot :all}})

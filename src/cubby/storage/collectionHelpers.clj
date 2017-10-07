@@ -144,6 +144,7 @@
         content (.getBytes to-write (if (= encoding "bin") "UTF-8" encoding))]
         (mmap/put-bytes mapped-file header-bytes header-pos)
         (mmap/put-bytes mapped-file content write-pos)
+        (.release (.buf header-buf))
         {:header header :contents to-write}))))
     
 (defn readCubbyAgent

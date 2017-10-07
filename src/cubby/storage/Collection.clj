@@ -29,6 +29,8 @@
               [gcAgents [] void]
               [close [] void]
               [getMappedFile [] clj_mmap.Mmap]
+              [getAgents [] clojure.lang.Atom]
+              [getAgent [java.lang.Long] clojure.lang.Agent]
               [getSlotCapacity [] java.lang.Long]]
     :constructors {[java.lang.String] []
                    [java.lang.String java.lang.Boolean java.lang.Long java.lang.Long] []})
@@ -109,23 +111,23 @@
           (.close old-mapped-file)))
 
       ;; Write the header and the msg
-      (send-off (get @(get @(.state this) :agents) id) writeCubbyAgent f header-buf header-size header-pos to-write write-pos write-len (.getMappedFile this))
+      (send-off (.getAgent this id) writeCubbyAgent f header-buf header-size header-pos to-write write-pos write-len (.getMappedFile this))
 
-      ;; Return the remaining msg that wont fit in this cubby
+      ;; Return the remaining msg that wont fit in this slot
       (if (= (count the-rest) 0)
         nil
         the-rest))))
 
 (defn -ensureAgent
   [this ^java.lang.Long id]
-  ;; If the agent doesn't exist, create it atomically
-  (let [agent-map @(get @(.state this) :agents)]
+  "If the agent doesn't exist, create it atomically"
+  (let [agent-map @(.getAgents this)]
     (when (nil? (get agent-map id))
-      (swap! (get @(.state this) :agents) assoc id (agent nil)))))
+      (swap! (.getAgents this) assoc id (agent nil)))))
 
 (defn -gcAgents
   [this]
-  (let [agent-vals (mapKV (fn [[k v]] (deref v)) @(get @(.state this) :agents))
+  (let [agent-vals (mapKV (fn [[k v]] (deref v)) @(.getAgents this))
     realized-agents (filterVals (fn [v] (not (nil? v))) agent-vals)
     sorted-by-time (sortedMapByValue realized-agents (fn [x] (:lastupdate (:header x))))
     sizes (mapKV (fn [[k v]] (:length (:header v))) sorted-by-time)
@@ -134,43 +136,46 @@
     (doseq [index index-exceed-max-size]
       (let [gc-key (nth (keys size-sum) index)]
         (safePrint "[gc]" gc-key)
-        (send-off (get @(get @(.state this) :agents) gc-key) (fn [_] nil))))))
+        (send-off (.getAgent this  gc-key) (fn [_] nil))))))
 
 (defn -readRawHeader
   [this ^java.lang.Long id]
-  ;; Reads and returns a byte array containing the header for the cubby Id
+  "Reads and returns a byte array containing the header for the cubby ID"
   (let [read-len (.getHeaderSize this)
     read-pos (* id (+ read-len (.getSlotCapacity this)))
     f (io/file (get @(.state this) :filename))]
-    (when (ensureFileSize f (+ read-pos read-len (.getSlotCapacity this)))
-      ;;Re-map the file
-      (let [old-mapped-file (.getMappedFile this)]
-        (reset! (get @(.state this) :mapped-file) (mmap/get-mmap (.getFilename this) :read-write))
-        (.close old-mapped-file)))
-    (mmap/get-bytes (.getMappedFile this) read-pos read-len)))
+    (if (ensureFileSize f (+ read-pos read-len (.getSlotCapacity this)))
+      nil
+      (mmap/get-bytes (.getMappedFile this) read-pos read-len))))
 
 (defn -readHeader
   [this ^java.lang.Long id]
-  ;; Read a composed header for the cubby Id
+  "Read a composed header for the cubby Id"
   (let [raw (.readRawHeader this id)]
-    (compose-buffer headerSpec :orig-buffer raw)))
+    (if (nil? raw)
+      nil
+      (compose-buffer headerSpec :orig-buffer raw))))
 
 (defn -read
   [this ^java.lang.Long id 
         ^Boolean add-header?]
+  "Read the cubby contents, and optionally include the header"
 
-  ;; Read the cubby contents, and optionally include the header
   (.ensureAgent this id)
 
-  (let [*agent* (get @(get @(.state this) :agents) id)]
-    (while (nil? @*agent*)
-      (send-off *agent* readCubbyAgent id (.readHeader this id) (.getFilename this) (.getHeaderSize this) (.getSlotCapacity this) (.getMappedFile this))
-      (await-for 10 *agent*) ;; Wait at most 10 ms for data to populate the agent
-      (Thread/sleep 10))
-    (let [value @*agent*]
-      (if (true? add-header?)
-        value
-        {:contents (:contents value)}))))
+  (let [*agent* (.getAgent this id)
+        header (.readHeader this id)]
+    (if (nil? header)
+      nil
+      (do
+        (while (nil? @*agent*)
+          (send-off *agent* readCubbyAgent id header (.getFilename this) (.getHeaderSize this) (.getSlotCapacity this) (.getMappedFile this))
+          (await-for 10 *agent*) ;; Wait at most 10 ms for data to populate the agent
+          (Thread/sleep 10))
+        (let [value @*agent*]
+          (if (true? add-header?)
+            value
+            {:contents (:contents value)}))))))
  
 (defn -getFilename
   [this]
@@ -186,6 +191,14 @@
   [this]
   "Getter for the raw mmap"
   @(get @(.state this) :mapped-file))
+
+(defn -getAgents
+  [this]
+  (get @(.state this) :agents))
+
+(defn -getAgent
+  [this id]
+  (get @(.getAgents this) id))
 
 (defn -close
   [this]
