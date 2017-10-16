@@ -26,7 +26,8 @@
     (add-collection-manager collectionName)))
 
 (defn write-cubby
-  ([^java.lang.String collectionName ^java.lang.Long spot msg] (write-cubby collectionName spot msg (if (= (str (type msg)) "class [B") "bin" "UTF-8")))
+  ([^java.lang.String collectionName ^java.lang.Long spot msg] 
+    (write-cubby collectionName spot msg (if (= (str (type msg)) "class [B") "bin" "UTF-8")))
   ([^java.lang.String collectionName ^java.lang.Long spot ^java.lang.String msg ^java.lang.String encoding]
     (ensure-collection-manager collectionName)
     (if (= encoding "bin")
@@ -40,10 +41,12 @@
     (ensure-collection-manager collectionName)
     (.read (get-collection-manager collectionName) spot add-header?)))
 
+;; Get filename of a collection
 (defn get-filename
   [^java.lang.String collectionName]
   (.getFilename (get-collection-manager collectionName)))
 
+  ;; Close all colections
 (defn close-collections
   []
   (doseq [col @collection-manager-map]

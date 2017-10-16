@@ -74,7 +74,7 @@
     "Calculate moving sum starting at position 0"
     (movingSum coll 0))
   ([coll s]
-    "Calculate moving sum from arbitatray position"
+    "Calculate moving sum from arbitrary position"
     (if (empty? coll)
       (empty coll)
       (let [new-val (+ s (first coll))]
