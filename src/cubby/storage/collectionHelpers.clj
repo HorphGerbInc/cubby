@@ -10,7 +10,7 @@
             [clojure.core.async :refer [go-loop <! timeout]])
   (:import (java.io RandomAccessFile)))
 
-
+; Define all available encoding schemes
 (def encodings ["US-ASCII"
                 "ISO-8859-1"
                 "UTF-8"
@@ -144,7 +144,7 @@
         content (.getBytes to-write (if (= encoding "bin") "UTF-8" encoding))]
         (mmap/put-bytes mapped-file header-bytes header-pos)
         (mmap/put-bytes mapped-file content write-pos)
-        (.release (.buf header-buf))
+        (.release (.buf header-buf)) ; Release the buffer from memory
         {:header header :contents to-write}))))
     
 (defn readCubbyAgent
@@ -161,7 +161,8 @@
     read-pos (+ header-size (* id (+ header-size slot-capacity)))
     read-len (:length header)
     encoding (:encoding header)] 
-    ;; Don't actually read from disk if the data hasnt changed
+    (.release (.buf header-buf)) ; Release the buffer from memory
+    ; Don't actually read from disk if the data hasnt changed
     (if (and (not (nil? cur)) (= (:signature (:header cur)) (:signature header)))
       cur
       (if (and (.exists f) (<= (+ read-pos read-len) (.length f)))
