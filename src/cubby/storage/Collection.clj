@@ -8,7 +8,7 @@
             [clojure.core.async :refer [go-loop <! timeout]])
   (:import (java.io RandomAccessFile)))
 
-  ;; 
+  ;; Define class properties 
   (gen-class
     :name "cubby.storage.Collection"
     :state state
@@ -36,6 +36,7 @@
     :constructors {[java.lang.String] []
                    [java.lang.String java.lang.Boolean java.lang.Long java.lang.Long] []})
 
+;; Load helper functions
 (load "collectionHelpers")
 
 (def headerSpec (spec :signature (string-type 64) :length (int32-type) :encoding (byte-type)))
@@ -52,7 +53,7 @@
                :agents (atom {})
                :mapped-file (atom (mmap/get-mmap (.getAbsolutePath (io/file filename)) :read-write))})]))
 
-  ;; After initialization we need to start garbage collection.
+;; After initialization we need to start garbage collection.
 (defn -post-init
   ([this ^java.lang.String filename]
     "By default we should garbage collect agents"
