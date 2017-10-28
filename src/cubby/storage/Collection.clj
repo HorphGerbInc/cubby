@@ -8,6 +8,7 @@
             [clojure.core.async :refer [go-loop <! timeout]])
   (:import (java.io RandomAccessFile)))
 
+  ;; 
   (gen-class
     :name "cubby.storage.Collection"
     :state state
@@ -40,6 +41,7 @@
 (def headerSpec (spec :signature (string-type 64) :length (int32-type) :encoding (byte-type)))
 (def modelBuf (compose-buffer headerSpec))
 
+;; Initialize a new cubby storage collection with a backing file.
 (defn -init
   ([^java.lang.String filename]
     (-init filename true (* 4 1024 1024) (* 256 1024 1024)))
@@ -50,6 +52,7 @@
                :agents (atom {})
                :mapped-file (atom (mmap/get-mmap (.getAbsolutePath (io/file filename)) :read-write))})]))
 
+  ;; After initialization we need to start garbage collection.
 (defn -post-init
   ([this ^java.lang.String filename]
     "By default we should garbage collect agents"
@@ -59,6 +62,7 @@
     (when (true? gc?)
       (future (.startGC this)))))
 
+;; The size of the header
 (defn -getHeaderSize
   ([this]
     "No header is passed in, use the model buffer as reference"
@@ -67,6 +71,7 @@
     "A header is passed in, use it"
     (.capacity (.buf header))))
 
+;; Begin garbage collection
 (defn -startGC
   ([this]
     "By default check if garbage collection is necessary every minute"
@@ -79,6 +84,11 @@
         (<! (timeout t))  
       (recur)))))
 
+;;  Write a message to a bucket with a given encoding.
+;;
+;;    @id Bucket identifier
+;;    @msg Message to write
+;;    @[Optional]encoding Underlying encoding
 (defn -write
   ([this ^java.lang.Long id
          ^bytes msg]
@@ -86,15 +96,17 @@
   ([this ^java.lang.Long id 
          ^java.lang.String msg
          ^java.lang.String encoding]
-    (let [f (io/file (get @(.state this) :filename))
-      to-write (subs msg 0 (min (count msg) (.getSlotCapacity this)))
-      write-len (count to-write)
-      the-rest (subs msg write-len (count msg))
-      header-buf (compose-buffer headerSpec)
-      header-size (.getHeaderSize this header-buf)
-      header-pos (* id (+ header-size (.getSlotCapacity this)))
-      write-pos (+ header-pos header-size)
-      signature (getSignature to-write)]
+    (let [
+        f (io/file (get @(.state this) :filename))                        ;; underlying file
+        to-write (subs msg 0 (min (count msg) (.getSlotCapacity this)))   ;; data we can fit
+        write-len (count to-write)                                        ;; length of data
+        the-rest (subs msg write-len (count msg))                         ;; remaining data
+        header-buf (compose-buffer headerSpec)                            ;; buffer that holds header
+        header-size (.getHeaderSize this header-buf)                      ;; size of the header (constant?)
+        header-pos (* id (+ header-size (.getSlotCapacity this)))         ;; offset in file to write header
+        write-pos (+ header-pos header-size)                              ;; offset in file to write data
+        signature (getSignature to-write)                                 ;; signature
+      ]
  
       ;; Populate the header with the new data
       (set-field header-buf :signature signature)
@@ -105,7 +117,7 @@
       (.ensureAgent this id)
     
       (when (ensureFileSize f (+ header-pos header-size (.getSlotCapacity this)))
-        ;;Re-map the file
+        ;; Re-map the file
         (let [old-mapped-file (.getMappedFile this)]
           (reset! (get @(.state this) :mapped-file) (mmap/get-mmap (.getFilename this) :read-write))
           (.close old-mapped-file)))
@@ -118,32 +130,42 @@
         nil
         the-rest))))
 
+;; Ennsure that we have an agent
 (defn -ensureAgent
   [this ^java.lang.Long id]
   "If the agent doesn't exist, create it atomically"
-  (let [agent-map @(.getAgents this)]
+  (let [
+      agent-map @(.getAgents this)
+    ]
     (when (nil? (get agent-map id))
       (swap! (.getAgents this) assoc id (agent nil)))))
 
+;; Garbage collect agents
 (defn -gcAgents
   [this]
-  (let [agent-vals (mapKV (fn [[k v]] (deref v)) @(.getAgents this))
-    realized-agents (filterVals (fn [v] (not (nil? v))) agent-vals)
-    sorted-by-time (sortedMapByValue realized-agents (fn [x] (:lastupdate (:header x))))
-    sizes (mapKV (fn [[k v]] (:length (:header v))) sorted-by-time)
-    size-sum (mapKV (fn [[k v]] (nth (movingSum (vals sizes)) (.indexOf (keys sizes) k))) sizes)
-    index-exceed-max-size (keep-indexed #(when (>= %2 (get @(.state this) :maxCache)) %1) (vals size-sum))]
+  (let [
+      agent-vals (mapKV (fn [[k v]] (deref v)) @(.getAgents this))
+      realized-agents (filterVals (fn [v] (not (nil? v))) agent-vals)
+      sorted-by-time (sortedMapByValue realized-agents (fn [x] (:lastupdate (:header x))))
+      sizes (mapKV (fn [[k v]] (:length (:header v))) sorted-by-time)
+      size-sum (mapKV (fn [[k v]] (nth (movingSum (vals sizes)) (.indexOf (keys sizes) k))) sizes)
+      index-exceed-max-size (keep-indexed #(when (>= %2 (get @(.state this) :maxCache)) %1) (vals size-sum))
+    ]
     (doseq [index index-exceed-max-size]
-      (let [gc-key (nth (keys size-sum) index)]
+      (let [
+          gc-key (nth (keys size-sum) index)
+          ]
         (safePrint "[gc]" gc-key)
         (send-off (.getAgent this  gc-key) (fn [_] nil))))))
 
 (defn -readRawHeader
   [this ^java.lang.Long id]
   "Reads and returns a byte array containing the header for the cubby ID"
-  (let [read-len (.getHeaderSize this)
-    read-pos (* id (+ read-len (.getSlotCapacity this)))
-    f (io/file (get @(.state this) :filename))]
+  (let [
+      read-len (.getHeaderSize this)
+      read-pos (* id (+ read-len (.getSlotCapacity this)))
+      f (io/file (get @(.state this) :filename))
+    ]
     (if (ensureFileSize f (+ read-pos read-len (.getSlotCapacity this)))
       nil
       (mmap/get-bytes (.getMappedFile this) read-pos read-len))))
@@ -151,7 +173,9 @@
 (defn -readHeader
   [this ^java.lang.Long id]
   "Read a composed header for the cubby Id"
-  (let [raw (.readRawHeader this id)]
+  (let [
+      raw (.readRawHeader this id)
+    ]
     (if (nil? raw)
       nil
       (compose-buffer headerSpec :orig-buffer raw))))
@@ -176,30 +200,36 @@
           (if (true? add-header?)
             value
             {:contents (:contents value)}))))))
- 
+
+;; Get the name of the underlying file
 (defn -getFilename
   [this]
   "Getter for the collection filename"
   (get @(.state this) :filename))
 
+;; Get the capacity of a slot
 (defn -getSlotCapacity
   [this]
   "Getter for the slot capacity"
   (get @(.state this) :slotCapacity))
 
+;; Get the memory mapped file
 (defn -getMappedFile
   [this]
   "Getter for the raw mmap"
   @(get @(.state this) :mapped-file))
 
+;; Get the list of agents
 (defn -getAgents
   [this]
   (get @(.state this) :agents))
 
+;; Get an agent by id
 (defn -getAgent
   [this id]
   (get @(.getAgents this) id))
 
+;; Close the underlying memory mapped file
 (defn -close
   [this]
   "Close the mapped file"

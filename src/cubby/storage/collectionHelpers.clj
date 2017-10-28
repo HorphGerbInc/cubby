@@ -48,6 +48,9 @@
   "Get a 256 bit SHA hash of a string s"
   (digest/sha-256 s))
 
+;; Ensure that a particular file is at least a certain size
+;;
+;;  @size The required size of the file
 (defn ensureFileSize
   [f size]
   "Ensure that a particular file is at least a certain size"
@@ -59,53 +62,69 @@
         true)
       false)))
 
+;; Map a function over a collection
+;;
+;;  @func   Mapping function
+;;  @col    Map to apply function to
 (defn mapKV 
-  [f coll]
+  [func col]
   "Map a function over a collection"
-  (reduce-kv (fn [m k v] (assoc m k (f [k v]))) (empty coll) coll))
+  (reduce-kv (fn [m k v] (assoc m k (func [k v]))) (empty col) col))
 
+;; Filter a map by value with a predicate function
+;;
+;;  @pred Predicate function
+;;  @col  Map to filter
 (defn filterVals
-  [pred m]
-  "Filter a map by value with a predicate function"
-  (into {} (filter (fn [[k v]] (pred v)) m)))
+  [pred col]
+  (into {} (filter (fn [[k v]] (pred v)) col)))
 
+;;  Calculate prefix sum
+;;
+;;  @col                      Collection to sum over
+;;  @[Optional,Default=0]sum  Starting sum
 (defn movingSum
-  ([coll]
-    "Calculate moving sum starting at position 0"
-    (movingSum coll 0))
-  ([coll s]
-    "Calculate moving sum from arbitrary position"
-    (if (empty? coll)
-      (empty coll)
-      (let [new-val (+ s (first coll))]
+  ([col]
+    (movingSum col 0))
+  ([col sum]
+    (if (empty? col)
+      (empty col)
+      (let [
+          new-val (+ sum (first col))
+        ]
         (lazy-seq
           (cons 
             new-val 
-            (movingSum (rest coll) new-val)))))))
+            (movingSum (rest col) new-val)))))))
 
+;;  Sort a map by its value
+;;
+;;    @col                    The map
+;;    @comp                   Compares two elements?
+;;    @order[Default='desc]   'desc or 'asc
 (defn sortedMapByValue
-  ([m f]
+  ([col comp]
     "If no order is set, default to descending"
-    (sortedMapByValue m f 'desc))
-  ([m f o]
+    (sortedMapByValue col comp 'desc))
+  ([col comp order]
     "Order a map by value using a function f and order ('desc or 'asc)"
     (cond 
-      (= o 'desc)
+      (= order 'desc)
         (do
           (into (sorted-map-by 
             (fn [key1 key2]
               (compare 
-                [(f (get m key2)) key2]
-                [(f (get m key1)) key1])))
-                  m))
-      (= o 'asc)
+                [(comp (get col key2)) key2]
+                [(comp (get col key1)) key1])))
+                  col))
+      (= order 'asc)
         (do
           (into (sorted-map-by 
             (fn [key1 key2]
               (compare 
-                [(f (get m key1)) key1]
-                [(f (get m key2)) key2])))
-                  m))
+                [(comp (get col key1)) key1]
+                [(comp (get col key2)) key2])))
+                  col))
       :else (throw (Exception. "Invalid order!")))))
 
 (defn getEncodingFromCode
