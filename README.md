@@ -6,4 +6,4 @@ provides fast reads for recently accessed slots, and a garbage collection system
 atomically once the write operation is successful, ensuring that any parallel reads still have access to the previous cache. Cache misses during a read operation automatically trigger
 a filesystem read.
 
-![Build Status](http://jeffgabeci.westus2.cloudapp.azure.com:8080/buildStatus/icon?job=Cubby/master "Buiild Status")
+[![Build Status](http://jeffgabeci.westus2.cloudapp.azure.com:8080/buildStatus/icon?job=Cubby/master)](http://jeffgabeci.westus2.cloudapp.azure.com:8080/job/Cubby/job/master/)
