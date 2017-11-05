@@ -5,3 +5,5 @@ Each slot in a collection is composed of a metadata header and the contents, whi
 provides fast reads for recently accessed slots, and a garbage collection system automatically frees up cache that exceeds a user-defined cache limit. Slot writes update the in-memory cache
 atomically once the write operation is successful, ensuring that any parallel reads still have access to the previous cache. Cache misses during a read operation automatically trigger
 a filesystem read.
+
+[![Build Status](http://jeffgabeci.westus2.cloudapp.azure.com:8080/buildStatus/icon?job=Cubby/master)](http://jeffgabeci.westus2.cloudapp.azure.com:8080/job/Cubby/job/master/)
