@@ -54,7 +54,7 @@
 ;;
 ;;  @collectionName The name of the collection
 ;;  @spot Bucket to read from
-;;  @add-header? TODO
+;;  @add-header? Switch to add a header containing metadata about a bucket
 (defn read-cubby
   ([^java.lang.String collectionName ^java.lang.Long spot]
     (read-cubby collectionName spot false))

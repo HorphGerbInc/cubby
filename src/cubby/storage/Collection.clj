@@ -32,7 +32,7 @@
               [getMappedFile [] clj_mmap.Mmap]
               [getAgents [] clojure.lang.Atom]
               [getAgent [java.lang.Long] clojure.lang.Agent]
-              [getSlotCapacity [] java.lang.Long]]
+              [getBucketCapacity [] java.lang.Long]]
     :constructors {[java.lang.String] []
                    [java.lang.String java.lang.Boolean java.lang.Long java.lang.Long] []})
 
@@ -46,9 +46,9 @@
 (defn -init
   ([^java.lang.String filename]
     (-init filename true (* 4 1024 1024) (* 256 1024 1024)))
-  ([^java.lang.String filename ^java.lang.Boolean gc? ^java.lang.Long slotCapacity ^java.lang.Long maxCache]
+  ([^java.lang.String filename ^java.lang.Boolean gc? ^java.lang.Long bucketCapacity ^java.lang.Long maxCache]
     [[] (atom {:filename (.getAbsolutePath (io/file filename))
-               :slotCapacity slotCapacity 
+               :bucketCapacity bucketCapacity 
                :maxCache maxCache
                :agents (atom {})
                :mapped-file (atom (mmap/get-mmap (.getAbsolutePath (io/file filename)) :read-write))})]))
@@ -58,7 +58,7 @@
   ([this ^java.lang.String filename]
     "By default we should garbage collect agents"
     (future (.startGC this)))
-  ([this ^java.lang.String filename ^java.lang.Boolean gc? ^java.lang.Long slotCapacity ^java.lang.Long maxCache]
+  ([this ^java.lang.String filename ^java.lang.Boolean gc? ^java.lang.Long bucketCapacity ^java.lang.Long maxCache]
     "Allows garbage collection to be disabled (not recommended)"
     (when (true? gc?)
       (future (.startGC this)))))
@@ -98,15 +98,15 @@
          ^java.lang.String msg
          ^java.lang.String encoding]
     (let [
-        f (io/file (get @(.state this) :filename))                        ;; underlying file
-        to-write (subs msg 0 (min (count msg) (.getSlotCapacity this)))   ;; data we can fit
-        write-len (count to-write)                                        ;; length of data
-        the-rest (subs msg write-len (count msg))                         ;; remaining data
-        header-buf (compose-buffer headerSpec)                            ;; buffer that holds header
-        header-size (.getHeaderSize this header-buf)                      ;; size of the header (constant?)
-        header-pos (* id (+ header-size (.getSlotCapacity this)))         ;; offset in file to write header
-        write-pos (+ header-pos header-size)                              ;; offset in file to write data
-        signature (getSignature to-write)                                 ;; signature
+        f (io/file (get @(.state this) :filename))                          ;; underlying file
+        to-write (subs msg 0 (min (count msg) (.getBucketCapacity this)))   ;; data we can fit
+        write-len (count to-write)                                          ;; length of data
+        the-rest (subs msg write-len (count msg))                           ;; remaining data
+        header-buf (compose-buffer headerSpec)                              ;; buffer that holds header
+        header-size (.getHeaderSize this header-buf)                        ;; size of the header (constant?)
+        header-pos (* id (+ header-size (.getBucketCapacity this)))         ;; offset in file to write header
+        write-pos (+ header-pos header-size)                                ;; offset in file to write data
+        signature (getSignature to-write)                                   ;; signature
       ]
  
       ;; Populate the header with the new data
@@ -117,7 +117,7 @@
       ;; Ensure there is an agent available to handle the file IO
       (.ensureAgent this id)
     
-      (when (ensureFileSize f (+ header-pos header-size (.getSlotCapacity this)))
+      (when (ensureFileSize f (+ header-pos header-size (.getBucketCapacity this)))
         ;; Re-map the file
         (let [old-mapped-file (.getMappedFile this)]
           (reset! (get @(.state this) :mapped-file) (mmap/get-mmap (.getFilename this) :read-write))
@@ -126,7 +126,7 @@
       ;; Write the header and the msg
       (send-off (.getAgent this id) writeCubbyAgent f header-buf header-size header-pos to-write write-pos write-len (.getMappedFile this))
 
-      ;; Return the remaining msg that wont fit in this slot
+      ;; Return the remaining msg that wont fit in this bucket
       (if (= (count the-rest) 0)
         nil
         the-rest))))
@@ -164,10 +164,10 @@
   "Reads and returns a byte array containing the header for the cubby ID"
   (let [
       read-len (.getHeaderSize this)
-      read-pos (* id (+ read-len (.getSlotCapacity this)))
+      read-pos (* id (+ read-len (.getBucketCapacity this)))
       f (io/file (get @(.state this) :filename))
     ]
-    (if (ensureFileSize f (+ read-pos read-len (.getSlotCapacity this)))
+    (if (ensureFileSize f (+ read-pos read-len (.getBucketCapacity this)))
       nil
       (mmap/get-bytes (.getMappedFile this) read-pos read-len))))
 
@@ -194,7 +194,7 @@
       nil
       (do
         (while (nil? @*agent*)
-          (send-off *agent* readCubbyAgent id header (.getFilename this) (.getHeaderSize this) (.getSlotCapacity this) (.getMappedFile this))
+          (send-off *agent* readCubbyAgent id header (.getFilename this) (.getHeaderSize this) (.getBucketCapacity this) (.getMappedFile this))
           (await-for 10 *agent*) ;; Wait at most 10 ms for data to populate the agent
           (Thread/sleep 10))
         (let [value @*agent*]
@@ -208,11 +208,11 @@
   "Getter for the collection filename"
   (get @(.state this) :filename))
 
-;; Get the capacity of a slot
-(defn -getSlotCapacity
+;; Get the capacity of a bucket
+(defn -getBucketCapacity
   [this]
-  "Getter for the slot capacity"
-  (get @(.state this) :slotCapacity))
+  "Getter for the bucket capacity"
+  (get @(.state this) :bucketCapacity))
 
 ;; Get the memory mapped file
 (defn -getMappedFile

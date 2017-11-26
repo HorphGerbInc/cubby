@@ -172,12 +172,12 @@
    ^clojurewerkz.buffy.core.BuffyBuf header-buf
    ^java.lang.String filename
    ^java.lang.Long header-size
-   ^java.lang.Long slot-capacity
+   ^java.lang.Long bucket-capacity
    mapped-file]
   "Read the contents of a cubby agent, relying on the cache if available and disk as secondary"
   (let [header (assoc (update (decompose header-buf) :encoding getEncodingFromCode) :lastupdate (getLongTime))
     f (io/file filename)
-    read-pos (+ header-size (* id (+ header-size slot-capacity)))
+    read-pos (+ header-size (* id (+ header-size bucket-capacity)))
     read-len (:length header)
     encoding (:encoding header)] 
     (.release (.buf header-buf)) ; Release the buffer from memory
